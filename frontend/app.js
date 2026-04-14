@@ -8,6 +8,55 @@ let currentClaim = null;  // claim currently displayed in detail view
 let distChart = null;
 let qChart = null;
 const relTime = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+const viewScrollMemory = {
+  claims: 0,
+  positions: 0,
+};
+function readScrollTop() {
+  return document.querySelector(".content")?.scrollTop ?? 0;
+}
+
+function writeScrollTop(top) {
+  const el = document.querySelector(".content");
+  if (el) el.scrollTop = Math.max(0, Number(top) || 0);
+}
+
+function showView(name, options = {}) {
+  const targetScroll = (options.restoreScroll && (name === "claims" || name === "positions"))
+    ? (viewScrollMemory[name] || 0)
+    : 0;
+
+  // Hide all views first — content area momentarily empty — then reset
+  // scrollTop on the container div (not window). iOS Safari honours this.
+  document.querySelectorAll(".view").forEach((v) => v.classList.add("hidden"));
+  writeScrollTop(targetScroll);
+  document.getElementById(`view-${name === "claim-detail" ? "claim-detail" : name}`).classList.remove("hidden");
+  document.getElementById("page-title").textContent =
+    name === "claims" ? "All Claims" :
+    name === "positions" ? "My Positions" :
+    (currentClaim ? currentClaim.name : "Claim Detail");
+
+  // Re-apply for restore case — content needs to be present
+  // before a non-zero scrollTop can stick.
+  if (targetScroll !== 0) {
+    requestAnimationFrame(() => writeScrollTop(targetScroll));
+    setTimeout(() => writeScrollTop(targetScroll), 0);
+  }
+}
+
+function getVisibleViewName() {
+  if (!document.getElementById("view-claims").classList.contains("hidden")) return "claims";
+  if (!document.getElementById("view-positions").classList.contains("hidden")) return "positions";
+  if (!document.getElementById("view-claim-detail").classList.contains("hidden")) return "claim-detail";
+  return null;
+}
+
+function rememberCurrentViewScroll() {
+  const view = getVisibleViewName();
+  if (view === "claims" || view === "positions") {
+    viewScrollMemory[view] = readScrollTop();
+  }
+}
 
 function clearChartInteraction(chart) {
   if (!chart) return;
@@ -177,6 +226,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 document.querySelectorAll(".nav-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     const view = btn.dataset.view;
+    rememberCurrentViewScroll();
     document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     if (view === "claims") {
@@ -190,19 +240,11 @@ document.querySelectorAll(".nav-btn").forEach((btn) => {
 });
 
 document.getElementById("btn-back").addEventListener("click", () => {
-  showView("claims");
+  rememberCurrentViewScroll();
+  showView("claims", { restoreScroll: true });
   loadClaims();
   setNavActive("claims");
 });
-
-function showView(name) {
-  document.querySelectorAll(".view").forEach((v) => v.classList.add("hidden"));
-  document.getElementById(`view-${name === "claim-detail" ? "claim-detail" : name}`).classList.remove("hidden");
-  document.getElementById("page-title").textContent =
-    name === "claims" ? "All Claims" :
-    name === "positions" ? "My Positions" :
-    (currentClaim ? currentClaim.name : "Claim Detail");
-}
 
 function setNavActive(name) {
   document.querySelectorAll(".nav-btn").forEach((b) => {
@@ -304,6 +346,8 @@ async function loadPositions() {
 async function openClaimDetail(claimId) {
   try {
     const claim = await apiFetch(`/api/claims/${claimId}`);
+    // Capture claims/positions scroll at the actual moment before view swap.
+    rememberCurrentViewScroll();
     currentClaim = claim;
     renderClaimDetail(claim);
     showView("claim-detail");
