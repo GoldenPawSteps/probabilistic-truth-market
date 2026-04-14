@@ -249,8 +249,10 @@ body {
   cursor: pointer;
   transition: border-color 0.2s, transform 0.15s;
 }
-.claim-card:hover { border-color: var(--primary); transform: translateY(-1px); }
-.no-hover .claim-card:hover { border-color: var(--border); transform: none; }
+@media (hover: hover) and (pointer: fine) {
+  .claim-card:hover { border-color: var(--primary); transform: translateY(-1px); }
+  .no-hover .claim-card:hover { border-color: var(--border); transform: none; }
+}
 
 .claim-card h4 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
 .claim-card .card-meta { color: var(--text-muted); font-size: 12px; margin-bottom: 10px; }
