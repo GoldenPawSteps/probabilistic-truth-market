@@ -5,7 +5,11 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "Installing dependencies..."
-pip install -r "$SCRIPT_DIR/backend/requirements.txt" -q
+python -m pip install -r "$SCRIPT_DIR/backend/requirements.txt" -q
 
 echo "Starting server on http://localhost:8000"
-cd "$SCRIPT_DIR" && python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+UVICORN_ARGS=(backend.app:app --host 127.0.0.1 --port 8000)
+if [ "${UVICORN_RELOAD:-0}" = "1" ]; then
+  UVICORN_ARGS+=(--reload)
+fi
+cd "$SCRIPT_DIR" && python -m uvicorn "${UVICORN_ARGS[@]}"

@@ -133,7 +133,7 @@ def test_infimum_single():
 
 
 def test_implied_distribution_zero_q():
-    """With q=0, implied = 1/p_i for each i (uniform weight of 1)."""
+    """With q=0, the implied Radon–Nikodym derivative is 1 for each outcome."""
     n = 4
     q = np.zeros(n)
     probs = np.array([0.1, 0.4, 0.3, 0.2])

@@ -255,23 +255,64 @@ def get_user_positions(user_id: str) -> List[Dict]:
 def execute_trade_atomic(
     user_id: str,
     claim_id: str,
+    expected_q: list,
+    expected_q_t: Optional[list],
+    expected_balance: float,
     new_q: list,
     new_q_t: list,
     new_balance: float,
 ) -> None:
     """
     Atomically update claim state, user position, and user balance.
+
+    Re-reads claim/position/balance inside a BEGIN IMMEDIATE transaction and
+    aborts with RuntimeError if the state has changed since validation was
+    performed (compare-and-swap). This prevents lost updates from concurrent
+    trades.
     """
-    with get_connection() as conn:
+    conn = get_connection()
+    try:
+        conn.isolation_level = None  # manual transaction control
+        conn.execute("BEGIN IMMEDIATE")
+
+        claim_row = conn.execute(
+            "SELECT q_values FROM claims WHERE id = ?", (claim_id,)
+        ).fetchone()
+        user_row = conn.execute(
+            "SELECT balance FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        position_row = conn.execute(
+            "SELECT q_t_values FROM positions WHERE user_id = ? AND claim_id = ?",
+            (user_id, claim_id),
+        ).fetchone()
+
+        if claim_row is None:
+            raise ValueError(f"Claim not found: {claim_id}")
+        if user_row is None:
+            raise ValueError(f"User not found: {user_id}")
+
+        current_q = json.loads(claim_row["q_values"])
+        current_q_t = (
+            json.loads(position_row["q_t_values"]) if position_row is not None else None
+        )
+        current_balance = user_row["balance"]
+
+        if (
+            current_q != expected_q
+            or current_q_t != expected_q_t
+            or current_balance != expected_balance
+        ):
+            conn.execute("ROLLBACK")
+            conn.close()
+            raise RuntimeError(
+                "Concurrent modification detected while executing trade"
+            )
+
         conn.execute(
             "UPDATE claims SET q_values = ? WHERE id = ?",
             (json.dumps(new_q), claim_id),
         )
-        existing = conn.execute(
-            "SELECT 1 FROM positions WHERE user_id = ? AND claim_id = ?",
-            (user_id, claim_id),
-        ).fetchone()
-        if existing:
+        if position_row is not None:
             conn.execute(
                 "UPDATE positions SET q_t_values = ? WHERE user_id = ? AND claim_id = ?",
                 (json.dumps(new_q_t), user_id, claim_id),
@@ -285,4 +326,11 @@ def execute_trade_atomic(
             "UPDATE users SET balance = ? WHERE id = ?",
             (new_balance, user_id),
         )
-        conn.commit()
+        conn.execute("COMMIT")
+    except Exception:
+        try:
+            conn.execute("ROLLBACK")
+        except Exception:
+            pass
+        conn.close()
+        raise

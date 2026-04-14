@@ -3,6 +3,7 @@ FastAPI application for the Perpetual Probabilistic Truth Market.
 """
 
 import os
+import math
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -65,8 +66,8 @@ class CreateClaimRequest(BaseModel):
     @field_validator("b")
     @classmethod
     def b_must_be_positive(cls, v: float) -> float:
-        if v <= 0:
-            raise ValueError("b must be positive")
+        if not math.isfinite(v) or v <= 0:
+            raise ValueError("b must be a finite positive number")
         return v
 
     @field_validator("omega")
@@ -79,8 +80,8 @@ class CreateClaimRequest(BaseModel):
     @field_validator("probabilities")
     @classmethod
     def probs_must_sum_to_one(cls, v: List[float]) -> List[float]:
-        if any(p <= 0 for p in v):
-            raise ValueError("all probabilities must be positive")
+        if any(not math.isfinite(p) or p <= 0 for p in v):
+            raise ValueError("all probabilities must be finite and positive")
         total = sum(v)
         if abs(total - 1.0) > 1e-6:
             raise ValueError(f"probabilities must sum to 1, got {total}")
@@ -90,6 +91,13 @@ class CreateClaimRequest(BaseModel):
 class TradeRequest(BaseModel):
     user_id: str
     delta_q: List[float]
+
+    @field_validator("delta_q")
+    @classmethod
+    def delta_q_must_be_finite(cls, v: List[float]) -> List[float]:
+        if not all(math.isfinite(x) for x in v):
+            raise ValueError("delta_q values must be finite (no NaN or inf)")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +249,11 @@ def execute_trade(claim_id: str, req: TradeRequest) -> dict:
     position = db.get_position(req.user_id, claim_id)
     q_t = np.array(position["q_t_values"] if position else [0.0] * n, dtype=float)
 
+    # Capture pre-trade state for compare-and-swap in execute_trade_atomic
+    expected_q = claim["q_values"]
+    expected_q_t = position["q_t_values"] if position else None
+    expected_balance = user["balance"]
+
     delta_q = np.array(req.delta_q, dtype=float)
     result = compute_trade(q, q_t, delta_q, user["balance"], probs, b)
 
@@ -256,13 +269,22 @@ def execute_trade(claim_id: str, req: TradeRequest) -> dict:
             },
         )
 
-    db.execute_trade_atomic(
-        user_id=req.user_id,
-        claim_id=claim_id,
-        new_q=result["new_q"],
-        new_q_t=result["new_q_t"],
-        new_balance=result["new_balance"],
-    )
+    try:
+        db.execute_trade_atomic(
+            user_id=req.user_id,
+            claim_id=claim_id,
+            expected_q=expected_q,
+            expected_q_t=expected_q_t,
+            expected_balance=expected_balance,
+            new_q=result["new_q"],
+            new_q_t=result["new_q_t"],
+            new_balance=result["new_balance"],
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="Trade rejected due to concurrent modification. Please retry.",
+        ) from exc
 
     updated_claim = db.get_claim(claim_id)
     return {
