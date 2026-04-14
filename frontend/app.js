@@ -99,6 +99,8 @@ function setCurrentUser(user) {
   localStorage.setItem("userName", user.name);
   document.getElementById("auth-screen").classList.add("hidden");
   document.getElementById("app-screen").classList.remove("hidden");
+  document.body.classList.add("no-hover");
+  window.addEventListener("pointerdown", () => document.body.classList.remove("no-hover"), { once: true });
   updateHeaderUser();
   showView("claims");
   loadClaims();
