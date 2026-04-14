@@ -128,11 +128,11 @@ Base URL: same origin (frontend served by backend)
 ### Auth and users
 
 - `POST /api/register`
-	- Body: `{ "name": "alice" }`
+	- Body: `{ "name": "alice", "password": "your-secure-password" }`
 	- Creates a user with initial balance `1.0`
 
 - `POST /api/login`
-	- Body: `{ "name": "alice" }`
+	- Body: `{ "name": "alice", "password": "your-secure-password" }`
 	- Returns existing user
 
 - `GET /api/users/{user_id}`
@@ -176,7 +176,7 @@ Start the server first (`./start.sh`), then run these from another terminal.
 ```bash
 curl -s -X POST http://127.0.0.1:8000/api/register \
 	-H "Content-Type: application/json" \
-	-d '{"name":"alice"}'
+	-d '{"name":"alice","password":"password123"}'
 ```
 
 ### 2. Login
@@ -184,7 +184,7 @@ curl -s -X POST http://127.0.0.1:8000/api/register \
 ```bash
 curl -s -X POST http://127.0.0.1:8000/api/login \
 	-H "Content-Type: application/json" \
-	-d '{"name":"alice"}'
+	-d '{"name":"alice","password":"password123"}'
 ```
 
 Copy the returned `id` into `USER_ID`.
@@ -287,4 +287,4 @@ If you want a clean local state, stop the app and delete `market.db`.
 ## Notes
 
 - This is a research/demo implementation and should not be used as-is for production trading.
-- Authentication is username-only (no password) for simplicity.
+- Passwords are required for auth and stored as PBKDF2-SHA256 hashes.

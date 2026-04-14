@@ -48,18 +48,23 @@ document.getElementById("btn-register").addEventListener("click", () => doAuth("
 document.getElementById("auth-name").addEventListener("keydown", (e) => {
   if (e.key === "Enter") doAuth("login");
 });
+document.getElementById("auth-password").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") doAuth("login");
+});
 
 async function doAuth(mode) {
   const name = document.getElementById("auth-name").value.trim();
+  const password = document.getElementById("auth-password").value;
   const errEl = document.getElementById("auth-error");
   hideError(errEl);
   if (!name) { showError(errEl, "Please enter a username."); return; }
+  if (password.length < 8) { showError(errEl, "Password must be at least 8 characters."); return; }
 
   try {
     const endpoint = mode === "login" ? "/api/login" : "/api/register";
     const user = await apiFetch(endpoint, {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, password }),
     });
     setCurrentUser(user);
   } catch (e) {
@@ -90,6 +95,7 @@ document.getElementById("btn-logout").addEventListener("click", () => {
   document.getElementById("app-screen").classList.add("hidden");
   document.getElementById("auth-screen").classList.remove("hidden");
   document.getElementById("auth-name").value = "";
+  document.getElementById("auth-password").value = "";
   hideError(document.getElementById("auth-error"));
 });
 

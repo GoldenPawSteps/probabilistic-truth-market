@@ -11,6 +11,12 @@ from typing import Optional, List, Dict, Any
 DB_PATH = "market.db"
 
 
+def _public_user(d: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(d)
+    out.pop("password_hash", None)
+    return out
+
+
 def get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -28,6 +34,7 @@ def init_db(db_path: str = DB_PATH) -> None:
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
                 balance REAL NOT NULL DEFAULT 1.0,
                 created_at TEXT NOT NULL
             );
@@ -55,6 +62,14 @@ def init_db(db_path: str = DB_PATH) -> None:
             );
             """
         )
+
+        # Backward-compatible migration for existing databases.
+        columns = conn.execute("PRAGMA table_info(users)").fetchall()
+        col_names = {row["name"] for row in columns}
+        if "password_hash" not in col_names:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''"
+            )
         conn.commit()
 
 
@@ -67,13 +82,13 @@ def _now() -> str:
 # ---------------------------------------------------------------------------
 
 
-def create_user(name: str) -> Dict:
+def create_user(name: str, password_hash: str) -> Dict:
     user_id = str(uuid.uuid4())
     now = _now()
     with get_connection() as conn:
         conn.execute(
-            "INSERT INTO users (id, name, balance, created_at) VALUES (?, ?, 1.0, ?)",
-            (user_id, name, now),
+            "INSERT INTO users (id, name, password_hash, balance, created_at) VALUES (?, ?, ?, 1.0, ?)",
+            (user_id, name, password_hash, now),
         )
         conn.commit()
     return {"id": user_id, "name": name, "balance": 1.0, "created_at": now}
@@ -84,10 +99,18 @@ def get_user(user_id: str) -> Optional[Dict]:
         row = conn.execute(
             "SELECT * FROM users WHERE id = ?", (user_id,)
         ).fetchone()
-        return dict(row) if row else None
+        return _public_user(dict(row)) if row else None
 
 
 def get_user_by_name(name: str) -> Optional[Dict]:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE name = ?", (name,)
+        ).fetchone()
+        return _public_user(dict(row)) if row else None
+
+
+def get_user_auth_by_name(name: str) -> Optional[Dict]:
     with get_connection() as conn:
         row = conn.execute(
             "SELECT * FROM users WHERE name = ?", (name,)

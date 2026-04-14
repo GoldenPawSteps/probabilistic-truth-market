@@ -4,6 +4,9 @@ FastAPI application for the Perpetual Probabilistic Truth Market.
 
 import os
 import math
+import hmac
+import hashlib
+import secrets
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -45,6 +48,7 @@ def startup() -> None:
 
 class RegisterRequest(BaseModel):
     name: str
+    password: str
 
     @field_validator("name")
     @classmethod
@@ -52,6 +56,13 @@ class RegisterRequest(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError("name must not be empty")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def password_must_be_long_enough(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("password must be at least 8 characters")
         return v
 
 
@@ -118,6 +129,30 @@ def _enrich_claim(claim: dict) -> dict:
     return claim
 
 
+def _hash_password(password: str) -> str:
+    iterations = 200_000
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations
+    )
+    return f"pbkdf2_sha256${iterations}${salt}${digest.hex()}"
+
+
+def _verify_password(password: str, stored_hash: str) -> bool:
+    try:
+        algo, iter_str, salt, digest_hex = stored_hash.split("$", 3)
+        if algo != "pbkdf2_sha256":
+            return False
+        iterations = int(iter_str)
+    except (ValueError, TypeError):
+        return False
+
+    check = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations
+    ).hex()
+    return hmac.compare_digest(check, digest_hex)
+
+
 # ---------------------------------------------------------------------------
 # API routes
 # ---------------------------------------------------------------------------
@@ -128,16 +163,16 @@ def register(req: RegisterRequest) -> dict:
     existing = db.get_user_by_name(req.name)
     if existing:
         raise HTTPException(status_code=409, detail="Username already taken")
-    user = db.create_user(req.name)
+    user = db.create_user(req.name, _hash_password(req.password))
     return user
 
 
 @app.post("/api/login")
 def login(req: RegisterRequest) -> dict:
-    user = db.get_user_by_name(req.name)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
+    user_auth = db.get_user_auth_by_name(req.name)
+    if not user_auth or not _verify_password(req.password, user_auth.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    return db.get_user(user_auth["id"])
 
 
 @app.get("/api/users/{user_id}")
