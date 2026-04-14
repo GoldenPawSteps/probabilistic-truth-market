@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Perpetual Probabilistic Truth Market</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="chart.umd.min.js"></script>
+</head>
+<body>
+  <!-- ================================================================ AUTH -->
+  <div id="auth-screen" class="screen">
+    <div class="auth-card">
+      <h1 class="logo">⚖ Truth Market</h1>
+      <p class="tagline">Perpetual Probabilistic Truth Market</p>
+      <div class="auth-form">
+        <input id="auth-name" type="text" placeholder="Enter username" autocomplete="off" />
+        <div class="auth-buttons">
+          <button id="btn-login" class="btn btn-primary">Login</button>
+          <button id="btn-register" class="btn btn-secondary">Register</button>
+        </div>
+        <div id="auth-error" class="error-msg hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================== MAIN APP -->
+  <div id="app-screen" class="screen hidden">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <span class="logo-sm">⚖ Truth Market</span>
+      </div>
+      <div class="header-center">
+        <span class="page-title" id="page-title">Dashboard</span>
+      </div>
+      <div class="header-right">
+        <div class="user-info">
+          <span class="user-name" id="header-username"></span>
+          <span class="user-balance">
+            Balance: <strong id="header-balance"></strong>
+          </span>
+        </div>
+        <button id="btn-logout" class="btn btn-sm">Logout</button>
+      </div>
+    </header>
+
+    <!-- Main layout -->
+    <div class="layout">
+
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <button id="btn-create-claim" class="btn btn-primary btn-full mb-3">
+          + Create Claim
+        </button>
+        <nav>
+          <button class="nav-btn active" data-view="claims">📋 All Claims</button>
+          <button class="nav-btn" data-view="positions">💼 My Positions</button>
+        </nav>
+      </aside>
+
+      <!-- Content area -->
+      <main class="content">
+
+        <!-- Claims List View -->
+        <div id="view-claims" class="view">
+          <div class="view-header">
+            <h2>All Claims</h2>
+            <input id="claims-search" type="text" placeholder="Search claims…" class="search-input" />
+          </div>
+          <div id="claims-list" class="cards-grid"></div>
+          <div id="claims-empty" class="empty-state hidden">
+            <p>No claims yet. Be the first to create one!</p>
+          </div>
+        </div>
+
+        <!-- Positions View -->
+        <div id="view-positions" class="view hidden">
+          <div class="view-header">
+            <h2>My Positions</h2>
+          </div>
+          <div id="positions-list" class="cards-grid"></div>
+          <div id="positions-empty" class="empty-state hidden">
+            <p>You have no open positions yet.</p>
+          </div>
+        </div>
+
+        <!-- Claim Detail View -->
+        <div id="view-claim-detail" class="view hidden">
+          <div class="view-header">
+            <button id="btn-back" class="btn btn-sm">← Back</button>
+            <h2 id="detail-claim-name"></h2>
+          </div>
+
+          <div class="detail-grid">
+
+            <!-- Left: Claim Info + Stats -->
+            <div class="detail-left">
+              <div class="card">
+                <h3>Market Statistics</h3>
+                <div class="stats-grid">
+                  <div class="stat">
+                    <span class="stat-label">Liquidity (b)</span>
+                    <span class="stat-value" id="detail-b"></span>
+                  </div>
+                  <div class="stat">
+                    <span class="stat-label">Cost C(q)</span>
+                    <span class="stat-value" id="detail-cost"></span>
+                  </div>
+                  <div class="stat">
+                    <span class="stat-label">Log-Partition</span>
+                    <span class="stat-value" id="detail-log-partition"></span>
+                  </div>
+                  <div class="stat">
+                    <span class="stat-label">Outcomes</span>
+                    <span class="stat-value" id="detail-n-outcomes"></span>
+                  </div>
+                </div>
+                <p class="claim-description" id="detail-description"></p>
+              </div>
+
+              <div class="card">
+                <h3>Probability Distributions</h3>
+                <div class="chart-container">
+                  <canvas id="dist-chart"></canvas>
+                </div>
+                <div class="chart-legend">
+                  <span class="legend-dot prior"></span> Prior P(ω)
+                  &nbsp;&nbsp;
+                  <span class="legend-dot implied"></span> Implied Q(ω)
+                </div>
+              </div>
+
+              <div class="card">
+                <h3>Market State q(ω)</h3>
+                <div class="chart-container">
+                  <canvas id="q-chart"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Trade Interface -->
+            <div class="detail-right">
+              <div class="card trade-card">
+                <h3>Trade</h3>
+                <p class="trade-subtitle">
+                  Set Δq for each outcome to change the market state.
+                </p>
+
+                <div id="delta-q-inputs" class="delta-inputs"></div>
+
+                <div class="trade-preset-btns">
+                  <button class="btn btn-sm" id="btn-preset-zero">Reset Δq = 0</button>
+                  <button class="btn btn-sm" id="btn-preset-uniform">Uniform +0.1</button>
+                </div>
+
+                <button id="btn-preview-trade" class="btn btn-primary btn-full mt-2">
+                  Preview Trade
+                </button>
+
+                <!-- Preview panel -->
+                <div id="trade-preview" class="trade-preview hidden">
+                  <h4>Trade Preview</h4>
+                  <div class="preview-stats">
+                    <div class="preview-row">
+                      <span>ΔC (cost change)</span>
+                      <span id="prev-delta-c" class="mono"></span>
+                    </div>
+                    <div class="preview-row">
+                      <span>Δ<sub>inf</sub> (collateral adj.)</span>
+                      <span id="prev-delta-inf" class="mono"></span>
+                    </div>
+                    <div class="preview-row highlight">
+                      <span>Required collateral</span>
+                      <span id="prev-required" class="mono"></span>
+                    </div>
+                    <div class="preview-row">
+                      <span>Current balance</span>
+                      <span id="prev-current-balance" class="mono"></span>
+                    </div>
+                    <div class="preview-row highlight">
+                      <span>Balance after trade</span>
+                      <span id="prev-new-balance" class="mono"></span>
+                    </div>
+                  </div>
+                  <div id="prev-valid-msg" class="valid-msg hidden">✓ Trade is valid</div>
+                  <div id="prev-invalid-msg" class="invalid-msg hidden">✗ Insufficient balance</div>
+
+                  <button id="btn-execute-trade" class="btn btn-success btn-full mt-2 hidden">
+                    Execute Trade
+                  </button>
+                </div>
+
+                <div id="trade-success" class="trade-success hidden">
+                  <span>✓ Trade executed successfully!</span>
+                </div>
+                <div id="trade-error" class="trade-error hidden"></div>
+              </div>
+
+              <!-- My position on this claim -->
+              <div class="card" id="my-position-card">
+                <h3>My Position</h3>
+                <div id="my-position-content">
+                  <p class="muted">No position on this claim yet.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ============================================================ CREATE CLAIM MODAL -->
+  <div id="create-claim-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Create New Claim</h3>
+        <button class="modal-close" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Claim Name *</label>
+          <input id="claim-name" type="text" placeholder="e.g. Will it rain tomorrow?" />
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="claim-description" placeholder="Optional description…" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Liquidity Parameter b *</label>
+          <input id="claim-b" type="number" value="1" min="0.001" step="0.1" />
+          <span class="hint">Controls market depth. Higher b → flatter price impact.</span>
+        </div>
+        <div class="form-group">
+          <label>Probability Space Type</label>
+          <select id="claim-space-type">
+            <option value="uniform">Uniform (N equal outcomes)</option>
+            <option value="binary">Binary (Yes / No)</option>
+            <option value="custom">Custom outcomes</option>
+          </select>
+        </div>
+
+        <!-- Uniform options -->
+        <div id="space-uniform" class="space-options">
+          <label>Number of outcomes N</label>
+          <input id="uniform-n" type="number" value="4" min="2" max="20" step="1" />
+        </div>
+
+        <!-- Custom options -->
+        <div id="space-custom" class="space-options hidden">
+          <label>Outcomes (one per line: label, probability)</label>
+          <textarea id="custom-outcomes" rows="5" placeholder="Yes, 0.5&#10;No, 0.3&#10;Maybe, 0.2"></textarea>
+          <span class="hint">Format: label, probability (must sum to 1)</span>
+        </div>
+
+        <div id="claim-form-error" class="error-msg hidden"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-cancel-claim" class="btn">Cancel</button>
+        <button id="btn-submit-claim" class="btn btn-primary">Create Claim</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

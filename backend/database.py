@@ -1,0 +1,288 @@
+"""
+SQLite persistence layer for the Perpetual Probabilistic Truth Market.
+"""
+
+import sqlite3
+import json
+import uuid
+from datetime import datetime, timezone
+from typing import Optional, List, Dict, Any
+
+DB_PATH = "market.db"
+
+
+def get_connection() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
+def init_db(db_path: str = DB_PATH) -> None:
+    global DB_PATH
+    DB_PATH = db_path
+    with get_connection() as conn:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                balance REAL NOT NULL DEFAULT 1.0,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS claims (
+                id TEXT PRIMARY KEY,
+                creator_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                omega TEXT NOT NULL,
+                probabilities TEXT NOT NULL,
+                q_values TEXT NOT NULL,
+                b REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (creator_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS positions (
+                user_id TEXT NOT NULL,
+                claim_id TEXT NOT NULL,
+                q_t_values TEXT NOT NULL,
+                PRIMARY KEY (user_id, claim_id),
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (claim_id) REFERENCES claims(id)
+            );
+            """
+        )
+        conn.commit()
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Users
+# ---------------------------------------------------------------------------
+
+
+def create_user(name: str) -> Dict:
+    user_id = str(uuid.uuid4())
+    now = _now()
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO users (id, name, balance, created_at) VALUES (?, ?, 1.0, ?)",
+            (user_id, name, now),
+        )
+        conn.commit()
+    return {"id": user_id, "name": name, "balance": 1.0, "created_at": now}
+
+
+def get_user(user_id: str) -> Optional[Dict]:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_user_by_name(name: str) -> Optional[Dict]:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE name = ?", (name,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def update_user_balance(user_id: str, new_balance: float) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id)
+        )
+        conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Claims
+# ---------------------------------------------------------------------------
+
+
+def create_claim(
+    creator_id: str,
+    name: str,
+    description: str,
+    omega: list,
+    probabilities: list,
+    b: float,
+) -> Dict:
+    claim_id = str(uuid.uuid4())
+    now = _now()
+    q_values = [0.0] * len(omega)
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO claims
+               (id, creator_id, name, description, omega, probabilities, q_values, b, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                claim_id,
+                creator_id,
+                name,
+                description,
+                json.dumps(omega),
+                json.dumps(probabilities),
+                json.dumps(q_values),
+                b,
+                now,
+            ),
+        )
+        conn.commit()
+    return {
+        "id": claim_id,
+        "creator_id": creator_id,
+        "name": name,
+        "description": description,
+        "omega": omega,
+        "probabilities": probabilities,
+        "q_values": q_values,
+        "b": b,
+        "created_at": now,
+    }
+
+
+def get_claim(claim_id: str) -> Optional[Dict]:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM claims WHERE id = ?", (claim_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        d["omega"] = json.loads(d["omega"])
+        d["probabilities"] = json.loads(d["probabilities"])
+        d["q_values"] = json.loads(d["q_values"])
+        return d
+
+
+def get_all_claims() -> List[Dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM claims ORDER BY created_at DESC"
+        ).fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["omega"] = json.loads(d["omega"])
+            d["probabilities"] = json.loads(d["probabilities"])
+            d["q_values"] = json.loads(d["q_values"])
+            result.append(d)
+        return result
+
+
+def update_claim_q(claim_id: str, q_values: list) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE claims SET q_values = ? WHERE id = ?",
+            (json.dumps(q_values), claim_id),
+        )
+        conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Positions
+# ---------------------------------------------------------------------------
+
+
+def get_position(user_id: str, claim_id: str) -> Optional[Dict]:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM positions WHERE user_id = ? AND claim_id = ?",
+            (user_id, claim_id),
+        ).fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        d["q_t_values"] = json.loads(d["q_t_values"])
+        return d
+
+
+def upsert_position(user_id: str, claim_id: str, q_t_values: list) -> None:
+    with get_connection() as conn:
+        existing = conn.execute(
+            "SELECT 1 FROM positions WHERE user_id = ? AND claim_id = ?",
+            (user_id, claim_id),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE positions SET q_t_values = ? WHERE user_id = ? AND claim_id = ?",
+                (json.dumps(q_t_values), user_id, claim_id),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO positions (user_id, claim_id, q_t_values) VALUES (?, ?, ?)",
+                (user_id, claim_id, json.dumps(q_t_values)),
+            )
+        conn.commit()
+
+
+def get_user_positions(user_id: str) -> List[Dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT p.claim_id, p.q_t_values,
+                      c.name AS claim_name, c.omega, c.probabilities,
+                      c.q_values, c.b
+               FROM positions p
+               JOIN claims c ON p.claim_id = c.id
+               WHERE p.user_id = ?""",
+            (user_id,),
+        ).fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["q_t_values"] = json.loads(d["q_t_values"])
+            d["omega"] = json.loads(d["omega"])
+            d["probabilities"] = json.loads(d["probabilities"])
+            d["q_values"] = json.loads(d["q_values"])
+            result.append(d)
+        return result
+
+
+# ---------------------------------------------------------------------------
+# Atomic trade execution
+# ---------------------------------------------------------------------------
+
+
+def execute_trade_atomic(
+    user_id: str,
+    claim_id: str,
+    new_q: list,
+    new_q_t: list,
+    new_balance: float,
+) -> None:
+    """
+    Atomically update claim state, user position, and user balance.
+    """
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE claims SET q_values = ? WHERE id = ?",
+            (json.dumps(new_q), claim_id),
+        )
+        existing = conn.execute(
+            "SELECT 1 FROM positions WHERE user_id = ? AND claim_id = ?",
+            (user_id, claim_id),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE positions SET q_t_values = ? WHERE user_id = ? AND claim_id = ?",
+                (json.dumps(new_q_t), user_id, claim_id),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO positions (user_id, claim_id, q_t_values) VALUES (?, ?, ?)",
+                (user_id, claim_id, json.dumps(new_q_t)),
+            )
+        conn.execute(
+            "UPDATE users SET balance = ? WHERE id = ?",
+            (new_balance, user_id),
+        )
+        conn.commit()
