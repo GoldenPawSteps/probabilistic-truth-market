@@ -9,6 +9,31 @@ let distChart = null;
 let qChart = null;
 const relTime = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 
+function clearChartInteraction(chart) {
+  if (!chart) return;
+  chart.setActiveElements([]);
+  if (chart.tooltip) {
+    chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+  }
+  chart.update();
+}
+
+function dismissChartInteractions() {
+  clearChartInteraction(distChart);
+  clearChartInteraction(qChart);
+}
+
+function tapIsInsideAnyChartCard(target) {
+  const distCanvas = document.getElementById("dist-chart");
+  const qCanvas = document.getElementById("q-chart");
+  const distCard = distCanvas ? distCanvas.closest(".card") : null;
+  const qCard = qCanvas ? qCanvas.closest(".card") : null;
+  return (
+    (distCard && distCard.contains(target)) ||
+    (qCard && qCard.contains(target))
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Utility helpers
 // ---------------------------------------------------------------------------
@@ -126,6 +151,13 @@ document.getElementById("btn-logout").addEventListener("click", () => {
 
 // Auto-login from localStorage
 window.addEventListener("DOMContentLoaded", async () => {
+  document.addEventListener("pointerdown", (event) => {
+    const detailView = document.getElementById("view-claim-detail");
+    if (!detailView || detailView.classList.contains("hidden")) return;
+    if (tapIsInsideAnyChartCard(event.target)) return;
+    dismissChartInteractions();
+  });
+
   const userId = localStorage.getItem("userId");
   if (userId) {
     try {
