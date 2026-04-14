@@ -86,6 +86,31 @@ python -m pip install -r backend/requirements.txt
 python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
+## Reset And Seed Demo Data
+
+If you want a clean local DB plus ready-to-use demo users, claims, and trade history:
+
+```bash
+python -m backend.demo_seed --reset
+```
+
+This recreates `market.db` and seeds:
+- 3 demo users: `alice`, `bob`, `carol`
+- 3 claims with non-zero market state
+- 6 executed trades so charts and trade history have data immediately
+
+All demo users use the same password:
+
+```text
+demo-pass-123
+```
+
+If you already deleted `market.db` yourself, run the seed without resetting again:
+
+```bash
+python -m backend.demo_seed
+```
+
 ## Development Workflow
 
 Use this sequence for day-to-day development:
@@ -265,6 +290,7 @@ Test coverage currently focuses on `backend/math_engine.py` behavior:
 	- `users`
 	- `claims`
 	- `positions`
+	- `trades`
 
 If you want a clean local state, stop the app and delete `market.db`.
 
@@ -287,6 +313,9 @@ If you want a clean local state, stop the app and delete `market.db`.
 
 - Want to reset all data:
 	- Stop server and delete `market.db`.
+
+- Want a clean DB with reusable demo data:
+	- Run `python -m backend.demo_seed --reset`.
 
 ## Notes
 
