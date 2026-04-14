@@ -102,6 +102,7 @@ function setCurrentUser(user) {
   document.body.classList.add("no-hover");
   window.addEventListener("pointerdown", () => document.body.classList.remove("no-hover"), { once: true });
   updateHeaderUser();
+  setNavActive("claims");
   showView("claims");
   loadClaims();
 }
@@ -115,6 +116,7 @@ document.getElementById("btn-logout").addEventListener("click", () => {
   currentUser = null;
   localStorage.removeItem("userId");
   localStorage.removeItem("userName");
+  setNavActive("claims");
   document.getElementById("app-screen").classList.add("hidden");
   document.getElementById("auth-screen").classList.remove("hidden");
   document.getElementById("auth-name").value = "";
