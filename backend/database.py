@@ -25,9 +25,10 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
-def init_db(db_path: str = DB_PATH) -> None:
+def init_db(db_path: Optional[str] = None) -> None:
     global DB_PATH
-    DB_PATH = db_path
+    if db_path is not None:
+        DB_PATH = db_path
     with get_connection() as conn:
         conn.executescript(
             """
@@ -59,6 +60,19 @@ def init_db(db_path: str = DB_PATH) -> None:
                 PRIMARY KEY (user_id, claim_id),
                 FOREIGN KEY (user_id) REFERENCES users(id),
                 FOREIGN KEY (claim_id) REFERENCES claims(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS trades (
+                id TEXT PRIMARY KEY,
+                claim_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                delta_q_values TEXT NOT NULL,
+                required_collateral REAL NOT NULL,
+                delta_c REAL NOT NULL,
+                delta_inf REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (claim_id) REFERENCES claims(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
             );
             """
         )
@@ -271,6 +285,33 @@ def get_user_positions(user_id: str) -> List[Dict]:
 
 
 # ---------------------------------------------------------------------------
+# Trades
+# ---------------------------------------------------------------------------
+
+
+def get_claim_trades(claim_id: str, limit: int = 25) -> List[Dict]:
+    safe_limit = max(1, min(limit, 200))
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT t.id, t.claim_id, t.user_id, u.name AS user_name,
+                      t.delta_q_values, t.required_collateral, t.delta_c,
+                      t.delta_inf, t.created_at
+               FROM trades t
+               JOIN users u ON t.user_id = u.id
+               WHERE t.claim_id = ?
+               ORDER BY t.created_at DESC
+               LIMIT ?""",
+            (claim_id, safe_limit),
+        ).fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["delta_q_values"] = json.loads(d["delta_q_values"])
+            result.append(d)
+        return result
+
+
+# ---------------------------------------------------------------------------
 # Atomic trade execution
 # ---------------------------------------------------------------------------
 
@@ -284,6 +325,10 @@ def execute_trade_atomic(
     new_q: list,
     new_q_t: list,
     new_balance: float,
+    delta_q: list,
+    required_collateral: float,
+    delta_c: float,
+    delta_inf: float,
 ) -> None:
     """
     Atomically update claim state, user position, and user balance.
@@ -348,6 +393,21 @@ def execute_trade_atomic(
         conn.execute(
             "UPDATE users SET balance = ? WHERE id = ?",
             (new_balance, user_id),
+        )
+        conn.execute(
+            """INSERT INTO trades
+               (id, claim_id, user_id, delta_q_values, required_collateral, delta_c, delta_inf, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(uuid.uuid4()),
+                claim_id,
+                user_id,
+                json.dumps(delta_q),
+                required_collateral,
+                delta_c,
+                delta_inf,
+                _now(),
+            ),
         )
         conn.execute("COMMIT")
     except Exception:

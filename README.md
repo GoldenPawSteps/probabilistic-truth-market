@@ -146,6 +146,10 @@ Base URL: same origin (frontend served by backend)
 - `GET /api/claims/{claim_id}`
 	- Claim details + derived statistics
 
+- `GET /api/claims/{claim_id}/trades?limit=25`
+	- Recent executed trades for a claim (newest first)
+	- `limit` range: 1..200
+
 - `POST /api/claims`
 	- Create a new claim
 	- Body fields:

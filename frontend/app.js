@@ -7,6 +7,7 @@ let currentUser = null;   // { id, name, balance }
 let currentClaim = null;  // claim currently displayed in detail view
 let distChart = null;
 let qChart = null;
+const relTime = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 
 // ---------------------------------------------------------------------------
 // Utility helpers
@@ -18,6 +19,26 @@ function fmt(n, digits = 6) {
 }
 
 function fmtShort(n) { return fmt(n, 4); }
+
+function fmtSigned(n, digits = 4) {
+  const value = Number(n);
+  if (!Number.isFinite(value)) return "0.0000";
+  return `${value >= 0 ? "+" : ""}${value.toFixed(digits)}`;
+}
+
+function formatRelativeTime(isoTime) {
+  const ts = Date.parse(isoTime);
+  if (!Number.isFinite(ts)) return "just now";
+  const seconds = Math.round((ts - Date.now()) / 1000);
+  const absSeconds = Math.abs(seconds);
+  if (absSeconds < 60) return relTime.format(seconds, "second");
+  const minutes = Math.round(seconds / 60);
+  if (Math.abs(minutes) < 60) return relTime.format(minutes, "minute");
+  const hours = Math.round(minutes / 60);
+  if (Math.abs(hours) < 24) return relTime.format(hours, "hour");
+  const days = Math.round(hours / 24);
+  return relTime.format(days, "day");
+}
 
 function showError(el, msg) {
   el.textContent = msg;
@@ -267,12 +288,49 @@ function renderClaimDetail(claim) {
   renderQChart(claim);
   renderDeltaQInputs(claim);
   renderMyPosition(claim);
+  renderRecentTrades(claim);
 
   // Reset trade UI
   document.getElementById("trade-preview").classList.add("hidden");
   document.getElementById("trade-success").classList.add("hidden");
   document.getElementById("trade-error").classList.add("hidden");
   document.getElementById("btn-execute-trade").classList.add("hidden");
+}
+
+async function renderRecentTrades(claim) {
+  const claimId = claim.id;
+  const content = document.getElementById("recent-trades-content");
+  content.innerHTML = '<p class="muted">Loading recent trades...</p>';
+  try {
+    const trades = await apiFetch(`/api/claims/${claimId}/trades?limit=20`);
+    if (!trades.length) {
+      content.innerHTML = '<p class="muted">No trades yet on this claim.</p>';
+      return;
+    }
+    const rows = trades.map((trade) => {
+      const net = (trade.delta_q_values || []).reduce((acc, v) => acc + v, 0);
+      const directionClass = net >= 0 ? "pos-positive" : "pos-negative";
+      const deltas = (trade.delta_q_values || []).map((v, i) => {
+        const label = claim.omega?.[i] ?? `ω${i + 1}`;
+        return `<span class="trade-delta-pill"><span>${escHtml(String(label))}</span> <span class="mono">${fmtSigned(v)}</span></span>`;
+      }).join(" ");
+      return `
+        <div class="trade-row">
+          <div class="trade-row-main">
+            <strong>${escHtml(trade.user_name)}</strong>
+            <span class="muted">${formatRelativeTime(trade.created_at)}</span>
+          </div>
+          <div class="trade-row-sub">
+            <span>Collateral: <span class="mono">${fmt(trade.required_collateral)}</span></span>
+            <span class="${directionClass}">Net Δq: <span class="mono">${fmtSigned(net)}</span></span>
+          </div>
+          <div class="trade-delta-grid">${deltas}</div>
+        </div>`;
+    }).join("");
+    content.innerHTML = `<div class="trade-list">${rows}</div>`;
+  } catch (e) {
+    content.innerHTML = '<p class="muted">Could not load recent trades.</p>';
+  }
 }
 
 // ── Distribution chart (prior P vs implied Q)
@@ -501,6 +559,7 @@ async function executeTrade() {
     document.getElementById("detail-log-partition").textContent = fmtShort(currentClaim.log_partition);
 
     await renderMyPosition(currentClaim);
+    await renderRecentTrades(currentClaim);
 
     // Reset delta-q inputs
     currentClaim.omega.forEach((_, i) => {

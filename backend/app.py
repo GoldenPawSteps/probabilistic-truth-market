@@ -7,11 +7,12 @@ import math
 import hmac
 import hashlib
 import secrets
+from contextlib import asynccontextmanager
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import List, Optional
 
 import sys
@@ -31,14 +32,20 @@ from math_engine import (
 # Application setup
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="Perpetual Probabilistic Truth Market", version="1.0.0")
-
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 
 
-@app.on_event("startup")
-def startup() -> None:
+@asynccontextmanager
+async def lifespan(_: FastAPI):
     db.init_db()
+    yield
+
+
+app = FastAPI(
+    title="Perpetual Probabilistic Truth Market",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -81,12 +88,26 @@ class CreateClaimRequest(BaseModel):
             raise ValueError("b must be a finite positive number")
         return v
 
+    @field_validator("name")
+    @classmethod
+    def name_must_be_non_empty(cls, v: str) -> str:
+        name = v.strip()
+        if not name:
+            raise ValueError("name must not be empty")
+        return name
+
     @field_validator("omega")
     @classmethod
     def omega_must_not_be_empty(cls, v: List[str]) -> List[str]:
         if len(v) < 2:
             raise ValueError("omega must have at least 2 outcomes")
-        return v
+        cleaned = [item.strip() for item in v]
+        if any(not item for item in cleaned):
+            raise ValueError("omega labels must not be empty")
+        lower_set = {item.lower() for item in cleaned}
+        if len(lower_set) != len(cleaned):
+            raise ValueError("omega labels must be unique")
+        return cleaned
 
     @field_validator("probabilities")
     @classmethod
@@ -97,6 +118,12 @@ class CreateClaimRequest(BaseModel):
         if abs(total - 1.0) > 1e-6:
             raise ValueError(f"probabilities must sum to 1, got {total}")
         return v
+
+    @model_validator(mode="after")
+    def lengths_must_match(self):
+        if len(self.omega) != len(self.probabilities):
+            raise ValueError("omega and probabilities must have the same length")
+        return self
 
 
 class TradeRequest(BaseModel):
@@ -198,13 +225,18 @@ def get_claim(claim_id: str) -> dict:
     return _enrich_claim(claim)
 
 
+@app.get("/api/claims/{claim_id}/trades")
+def get_claim_trades(claim_id: str, limit: int = 25) -> list:
+    claim = db.get_claim(claim_id)
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    if limit < 1 or limit > 200:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
+    return db.get_claim_trades(claim_id, limit)
+
+
 @app.post("/api/claims", status_code=201)
 def create_claim(req: CreateClaimRequest) -> dict:
-    if len(req.omega) != len(req.probabilities):
-        raise HTTPException(
-            status_code=422,
-            detail="omega and probabilities must have the same length",
-        )
     user = db.get_user(req.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -314,6 +346,10 @@ def execute_trade(claim_id: str, req: TradeRequest) -> dict:
             new_q=result["new_q"],
             new_q_t=result["new_q_t"],
             new_balance=result["new_balance"],
+            delta_q=req.delta_q,
+            required_collateral=result["required_collateral"],
+            delta_c=result["delta_c"],
+            delta_inf=result["delta_inf"],
         )
     except RuntimeError as exc:
         raise HTTPException(
