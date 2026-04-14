@@ -521,9 +521,7 @@ document.getElementById("modal-close").addEventListener("click", closeCreateModa
 document.querySelector(".modal-backdrop").addEventListener("click", closeCreateModal);
 
 document.getElementById("claim-space-type").addEventListener("change", function () {
-  const t = this.value;
-  document.getElementById("space-uniform").classList.toggle("hidden", t === "custom");
-  document.getElementById("space-custom").classList.toggle("hidden", t !== "custom");
+  document.getElementById("space-custom").classList.toggle("hidden", this.value !== "custom");
 });
 
 function openCreateModal() {
@@ -531,10 +529,8 @@ function openCreateModal() {
   document.getElementById("claim-name").value = "";
   document.getElementById("claim-description").value = "";
   document.getElementById("claim-b").value = "1";
-  document.getElementById("claim-space-type").value = "uniform";
-  document.getElementById("space-uniform").classList.remove("hidden");
+  document.getElementById("claim-space-type").value = "binary";
   document.getElementById("space-custom").classList.add("hidden");
-  document.getElementById("uniform-n").value = "4";
   document.getElementById("custom-outcomes").value = "";
   hideError(document.getElementById("claim-form-error"));
 }
@@ -562,11 +558,6 @@ async function submitCreateClaim() {
   if (spaceType === "binary") {
     omega = ["Yes", "No"];
     probabilities = [0.5, 0.5];
-  } else if (spaceType === "uniform") {
-    const n = parseInt(document.getElementById("uniform-n").value);
-    if (isNaN(n) || n < 2) { showError(errEl, "N must be at least 2."); return; }
-    omega = Array.from({ length: n }, (_, i) => `Outcome ${i + 1}`);
-    probabilities = Array(n).fill(1 / n);
   } else {
     // custom
     const lines = document.getElementById("custom-outcomes").value.trim().split("\n").filter((l) => l.trim());
@@ -610,6 +601,47 @@ async function submitCreateClaim() {
     showError(errEl, e.message);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Mobile sidebar toggle
+// ---------------------------------------------------------------------------
+
+(function initMobileNav() {
+  const sidebar = document.querySelector(".sidebar");
+  const overlay = document.getElementById("sidebar-overlay");
+  const toggleBtn = document.getElementById("btn-menu-toggle");
+
+  function openSidebar() {
+    sidebar.classList.add("open");
+    overlay.classList.add("visible");
+    toggleBtn.setAttribute("aria-expanded", "true");
+    toggleBtn.textContent = "✕";
+  }
+
+  function closeSidebar() {
+    sidebar.classList.remove("open");
+    overlay.classList.remove("visible");
+    toggleBtn.setAttribute("aria-expanded", "false");
+    toggleBtn.textContent = "☰";
+  }
+
+  toggleBtn.addEventListener("click", () => {
+    sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+  });
+
+  overlay.addEventListener("click", closeSidebar);
+
+  // Close when a nav item or create-claim is tapped
+  document.querySelectorAll(".nav-btn").forEach((btn) => {
+    btn.addEventListener("click", closeSidebar);
+  });
+  document.getElementById("btn-create-claim").addEventListener("click", closeSidebar);
+
+  // Close on resize back to desktop
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 640) closeSidebar();
+  });
+}());
 
 // ---------------------------------------------------------------------------
 // Utilities

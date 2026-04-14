@@ -30,6 +30,7 @@
     <!-- Header -->
     <header class="header">
       <div class="header-left">
+        <button id="btn-menu-toggle" class="btn btn-sm menu-toggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
         <span class="logo-sm">⚖ Truth Market</span>
       </div>
       <div class="header-center">
@@ -45,6 +46,9 @@
         <button id="btn-logout" class="btn btn-sm">Logout</button>
       </div>
     </header>
+
+    <!-- Sidebar overlay for mobile -->
+    <div id="sidebar-overlay" class="sidebar-overlay" aria-hidden="true"></div>
 
     <!-- Main layout -->
     <div class="layout">
@@ -238,16 +242,9 @@
         <div class="form-group">
           <label>Probability Space Type</label>
           <select id="claim-space-type">
-            <option value="uniform">Uniform (N equal outcomes)</option>
             <option value="binary">Binary (Yes / No)</option>
             <option value="custom">Custom outcomes</option>
           </select>
-        </div>
-
-        <!-- Uniform options -->
-        <div id="space-uniform" class="space-options">
-          <label>Number of outcomes N</label>
-          <input id="uniform-n" type="number" value="4" min="2" max="20" step="1" />
         </div>
 
         <!-- Custom options -->
