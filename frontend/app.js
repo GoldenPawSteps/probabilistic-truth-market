@@ -12,6 +12,7 @@ const viewScrollMemory = {
   claims: 0,
   positions: 0,
 };
+let previousListView = "claims";
 function readScrollTop() {
   return document.querySelector(".content")?.scrollTop ?? 0;
 }
@@ -241,9 +242,15 @@ document.querySelectorAll(".nav-btn").forEach((btn) => {
 
 document.getElementById("btn-back").addEventListener("click", () => {
   rememberCurrentViewScroll();
-  showView("claims", { restoreScroll: true });
-  loadClaims();
-  setNavActive("claims");
+  if (previousListView === "positions") {
+    showView("positions", { restoreScroll: true });
+    loadPositions();
+    setNavActive("positions");
+  } else {
+    showView("claims", { restoreScroll: true });
+    loadClaims();
+    setNavActive("claims");
+  }
 });
 
 function setNavActive(name) {
@@ -346,7 +353,8 @@ async function loadPositions() {
 async function openClaimDetail(claimId) {
   try {
     const claim = await apiFetch(`/api/claims/${claimId}`);
-    // Capture claims/positions scroll at the actual moment before view swap.
+    // Capture source view and scroll at the actual moment before view swap.
+    previousListView = getVisibleViewName() || "claims";
     rememberCurrentViewScroll();
     currentClaim = claim;
     renderClaimDetail(claim);
