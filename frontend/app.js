@@ -85,11 +85,9 @@ function reRenderChartsIfVisible() {
 function tapIsInsideAnyChartCard(target) {
   const distCanvas = document.getElementById("dist-chart");
   const qCanvas = document.getElementById("q-chart");
-  const distCard = distCanvas ? distCanvas.closest(".card") : null;
-  const qCard = qCanvas ? qCanvas.closest(".card") : null;
   return (
-    (distCard && distCard.contains(target)) ||
-    (qCard && qCard.contains(target))
+    (distCanvas && distCanvas.contains(target)) ||
+    (qCanvas && qCanvas.contains(target))
   );
 }
 
