@@ -13,9 +13,9 @@ from backend.math_engine import compute_trade
 DEMO_PASSWORD = "demo-pass-123"
 
 DEMO_USERS = [
-    {"name": "alice", "balance": 6.0},
-    {"name": "bob", "balance": 4.5},
-    {"name": "carol", "balance": 5.0},
+    {"name": "alice"},
+    {"name": "bob"},
+    {"name": "carol"},
 ]
 
 DEMO_CLAIMS = [
@@ -105,9 +105,6 @@ def _seed_users() -> Dict[str, Dict[str, Any]]:
     users: Dict[str, Dict[str, Any]] = {}
     for spec in DEMO_USERS:
         user = db.create_user(spec["name"], hash_password(DEMO_PASSWORD))
-        if spec["balance"] != user["balance"]:
-            db.update_user_balance(user["id"], spec["balance"])
-            user["balance"] = spec["balance"]
         users[spec["name"]] = user
     return users
 

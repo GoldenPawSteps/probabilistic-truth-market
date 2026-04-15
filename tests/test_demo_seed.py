@@ -28,7 +28,9 @@ def test_seed_demo_data_populates_users_claims_and_trades(tmp_path: Path):
 
     with db.get_connection() as conn:
         trade_count = conn.execute("SELECT COUNT(*) FROM trades").fetchone()[0]
+        max_balance = conn.execute("SELECT MAX(balance) FROM users").fetchone()[0]
     assert trade_count == 6
+    assert max_balance <= 1.0
 
 
 def test_seed_demo_data_requires_empty_db_without_reset(tmp_path: Path):
