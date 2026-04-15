@@ -73,9 +73,13 @@ function dismissChartInteractions() {
   clearChartInteraction(qChart);
 }
 
-function resizeCharts() {
-  if (distChart) distChart.resize();
-  if (qChart) qChart.resize();
+function reRenderChartsIfVisible() {
+  if (!currentClaim) return;
+  const detailView = document.getElementById("view-claim-detail");
+  if (detailView && !detailView.classList.contains("hidden")) {
+    renderDistChart(currentClaim);
+    renderQChart(currentClaim);
+  }
 }
 
 function tapIsInsideAnyChartCard(target) {
@@ -803,9 +807,11 @@ async function submitCreateClaim() {
   function onViewportChange() {
     closeSidebar();
     clearTimeout(_orientationTimer);
+    // Use a generous delay so the browser finishes applying new viewport
+    // dimensions before we destroy + recreate Chart.js canvases.
     _orientationTimer = setTimeout(() => {
-      resizeCharts();
-    }, 150);
+      reRenderChartsIfVisible();
+    }, 350);
   }
   window.addEventListener("orientationchange", onViewportChange);
   window.addEventListener("resize", onViewportChange);
