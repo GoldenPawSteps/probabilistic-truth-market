@@ -794,6 +794,13 @@ async function submitCreateClaim() {
   window.addEventListener("resize", () => {
     if (window.innerWidth > 640) closeSidebar();
   });
+
+  // Orientation and viewport changes can leave the drawer visually stale.
+  // Close it whenever the viewport shape changes.
+  window.addEventListener("orientationchange", closeSidebar);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", closeSidebar);
+  }
 }());
 
 // ---------------------------------------------------------------------------
