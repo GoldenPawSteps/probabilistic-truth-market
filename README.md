@@ -1,4 +1,4 @@
-# Perpetual Probabilistic Truth Market
+# Probabilize
 
 A full-stack demo application for a perpetual prediction-style market powered by a convex cost-function market maker.
 

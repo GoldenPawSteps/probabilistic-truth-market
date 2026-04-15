@@ -1,5 +1,5 @@
 """
-Tests for the mathematical engine of the Perpetual Probabilistic Truth Market.
+Tests for the mathematical engine of Probabilize.
 """
 
 import sys

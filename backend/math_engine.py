@@ -1,5 +1,5 @@
 """
-Mathematical engine for the Perpetual Probabilistic Truth Market.
+Mathematical engine for Probabilize.
 
 Implements the convex cost function market maker based on:
   C(q) = b * log(E_P[e^(q/b)])

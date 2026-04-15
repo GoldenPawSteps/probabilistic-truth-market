@@ -1,5 +1,5 @@
 """
-SQLite persistence layer for the Perpetual Probabilistic Truth Market.
+SQLite persistence layer for Probabilize.
 """
 
 import sqlite3

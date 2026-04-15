@@ -1,5 +1,5 @@
 """
-FastAPI application for the Perpetual Probabilistic Truth Market.
+FastAPI application for Probabilize.
 """
 
 import os
@@ -39,7 +39,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="Perpetual Probabilistic Truth Market",
+    title="Probabilize",
     version="1.0.0",
     lifespan=lifespan,
 )

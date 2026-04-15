@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the Perpetual Probabilistic Truth Market server
+# Start the Probabilize server
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
