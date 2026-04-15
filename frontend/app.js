@@ -73,6 +73,11 @@ function dismissChartInteractions() {
   clearChartInteraction(qChart);
 }
 
+function resizeCharts() {
+  if (distChart) distChart.resize();
+  if (qChart) qChart.resize();
+}
+
 function tapIsInsideAnyChartCard(target) {
   const distCanvas = document.getElementById("dist-chart");
   const qCanvas = document.getElementById("q-chart");
@@ -790,16 +795,22 @@ async function submitCreateClaim() {
   });
   document.getElementById("btn-create-claim").addEventListener("click", closeSidebar);
 
-  // Close on resize back to desktop
-  window.addEventListener("resize", () => {
-    if (window.innerWidth > 640) closeSidebar();
-  });
-
-  // Orientation and viewport changes can leave the drawer visually stale.
-  // Close it whenever the viewport shape changes.
-  window.addEventListener("orientationchange", closeSidebar);
+  // Orientation and viewport changes can leave the drawer visually stale
+  // and Chart.js canvases locked to the pre-rotation width.
+  // Use a debounced resize so charts reflow after the browser finishes
+  // applying the new viewport dimensions.
+  let _orientationTimer = null;
+  function onViewportChange() {
+    closeSidebar();
+    clearTimeout(_orientationTimer);
+    _orientationTimer = setTimeout(() => {
+      resizeCharts();
+    }, 150);
+  }
+  window.addEventListener("orientationchange", onViewportChange);
+  window.addEventListener("resize", onViewportChange);
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", closeSidebar);
+    window.visualViewport.addEventListener("resize", onViewportChange);
   }
 }());
 
