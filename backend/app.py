@@ -6,7 +6,7 @@ import os
 import math
 from contextlib import asynccontextmanager
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator, model_validator
 from typing import List, Optional
@@ -15,6 +15,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import database as db
+from demo_seed import reset_database_files, seed_demo_data
 from auth import hash_password, verify_password
 from math_engine import (
     cost,
@@ -135,6 +136,10 @@ class TradeRequest(BaseModel):
         return v
 
 
+class AdminResetRequest(BaseModel):
+    seed_demo: bool = True
+
+
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
@@ -151,6 +156,17 @@ def _enrich_claim(claim: dict) -> dict:
     claim["implied_rn"] = implied_distribution(q, probs, b).tolist()
     claim["implied_probs"] = implied_probabilities(q, probs, b).tolist()
     return claim
+
+
+def _require_admin_reset_token(token: Optional[str]) -> None:
+    configured = os.getenv("ADMIN_RESET_TOKEN", "")
+    if not configured:
+        raise HTTPException(
+            status_code=503,
+            detail="ADMIN_RESET_TOKEN is not configured",
+        )
+    if token != configured:
+        raise HTTPException(status_code=401, detail="Invalid admin token")
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +352,35 @@ def execute_trade(claim_id: str, req: TradeRequest) -> dict:
         "trade": result,
         "claim": _enrich_claim(updated_claim),
         "new_balance": result["new_balance"],
+    }
+
+
+@app.post("/api/admin/reset")
+def admin_reset(
+    req: AdminResetRequest,
+    x_admin_token: Optional[str] = Header(default=None),
+) -> dict:
+    """Reset the configured SQLite DB, optionally reseeding demo data."""
+    _require_admin_reset_token(x_admin_token)
+
+    target_path = db.DB_PATH
+    if req.seed_demo:
+        result = seed_demo_data(db_path=target_path, reset=True)
+        return {
+            "success": True,
+            "mode": "seeded",
+            "db_path": result["db_path"],
+            "counts": result["counts"],
+            "demo_password": result["password"],
+        }
+
+    reset_database_files(target_path)
+    db.init_db(target_path)
+    return {
+        "success": True,
+        "mode": "empty",
+        "db_path": target_path,
+        "counts": {"users": 0, "claims": 0, "trades": 0},
     }
 
 

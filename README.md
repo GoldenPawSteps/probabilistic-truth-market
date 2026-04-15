@@ -174,14 +174,44 @@ In your Railway service:
 
 This makes the app store SQLite at `/data/market.db` so data survives redeploys/restarts.
 
-### 4. Deploy
+### 4. Configure admin reset token (optional but recommended)
+
+Set environment variable:
+
+```text
+ADMIN_RESET_TOKEN=choose-a-long-random-secret
+```
+
+This enables a protected API endpoint to reset the database remotely.
+
+### 5. Deploy
 
 Railway uses:
 - `railway.json` start command: `uvicorn backend.app:app --host 0.0.0.0 --port ${PORT:-8000}`
 
 Once deployed, open your Railway service URL.
 
-### 5. Optional: seed demo data in production
+### 6. Optional: reset DB via API (no shell required)
+
+Seeded reset (recreate and seed demo users/claims/trades):
+
+```bash
+curl -s -X POST "$APP_URL/api/admin/reset" \
+	-H "x-admin-token: $ADMIN_RESET_TOKEN" \
+	-H "Content-Type: application/json" \
+	-d '{"seed_demo":true}'
+```
+
+Empty reset (recreate empty database):
+
+```bash
+curl -s -X POST "$APP_URL/api/admin/reset" \
+	-H "x-admin-token: $ADMIN_RESET_TOKEN" \
+	-H "Content-Type: application/json" \
+	-d '{"seed_demo":false}'
+```
+
+### 7. Optional: seed demo data in production shell
 
 From a Railway shell for the running service:
 
