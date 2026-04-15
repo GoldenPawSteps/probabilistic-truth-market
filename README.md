@@ -1,5 +1,9 @@
 # Probabilize
 
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/github?repo=https://github.com/GoldenPawSteps/probabilistic-truth-market)
+
+Click the badge above to deploy this repository to Railway.
+
 A full-stack demo application for a perpetual prediction-style market powered by a convex cost-function market maker.
 
 The app includes:
@@ -145,6 +149,47 @@ pytest -q
 Suggested commit scope:
 - Keep math engine and API behavior changes in one commit.
 - Keep UI-only updates in a separate commit when possible.
+
+## Deploy On Railway
+
+This repository is ready for Railway as a single web service:
+- Build dependencies from root `requirements.txt`
+- Start command from `railway.json`
+- FastAPI serves both API and frontend on one port
+
+### 1. Push this repository to GitHub
+
+Railway will deploy directly from your repo.
+
+### 2. Create a Railway project
+
+- In Railway, choose **New Project** -> **Deploy from GitHub repo**.
+- Select this repository.
+
+### 3. Add a persistent volume for SQLite
+
+In your Railway service:
+- Create a volume and mount it (for example at `/data`).
+- Add env var `RAILWAY_VOLUME_MOUNT_PATH=/data`.
+
+This makes the app store SQLite at `/data/market.db` so data survives redeploys/restarts.
+
+### 4. Deploy
+
+Railway uses:
+- `railway.json` start command: `uvicorn backend.app:app --host 0.0.0.0 --port ${PORT:-8000}`
+
+Once deployed, open your Railway service URL.
+
+### 5. Optional: seed demo data in production
+
+From a Railway shell for the running service:
+
+```bash
+python -m backend.demo_seed --reset
+```
+
+Then log in with demo users described above.
 
 ## API Overview
 

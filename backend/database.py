@@ -5,10 +5,16 @@ SQLite persistence layer for Probabilize.
 import sqlite3
 import json
 import uuid
+import os
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
-DB_PATH = "market.db"
+DEFAULT_DB_NAME = "market.db"
+DB_PATH = os.getenv("DATABASE_PATH") or (
+    os.path.join(os.getenv("RAILWAY_VOLUME_MOUNT_PATH", ""), DEFAULT_DB_NAME)
+    if os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
+    else DEFAULT_DB_NAME
+)
 
 
 def _public_user(d: Dict[str, Any]) -> Dict[str, Any]:
