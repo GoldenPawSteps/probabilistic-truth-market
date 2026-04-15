@@ -174,6 +174,23 @@ In your Railway service:
 
 This makes the app store SQLite at `/data/market.db` so data survives redeploys/restarts.
 
+If your data still resets on redeploy, it means the app is writing to ephemeral disk.
+Check these in Railway:
+- A volume is attached to this service.
+- The mount path is `/data` (or set `RAILWAY_VOLUME_MOUNT_PATH` to your mount path).
+- `DATABASE_PATH` is unset, or points inside the mounted volume.
+
+Quick verification from Railway shell:
+
+```bash
+python - <<'PY'
+from backend import database as db
+print(db.DB_PATH)
+PY
+```
+
+The printed path should be under your mounted volume, for example `/data/market.db`.
+
 ### 4. Configure admin reset token (optional but recommended)
 
 Set environment variable:

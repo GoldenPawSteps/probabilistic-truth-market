@@ -10,11 +10,25 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
 DEFAULT_DB_NAME = "market.db"
-DB_PATH = os.getenv("DATABASE_PATH") or (
-    os.path.join(os.getenv("RAILWAY_VOLUME_MOUNT_PATH", ""), DEFAULT_DB_NAME)
-    if os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
-    else DEFAULT_DB_NAME
-)
+
+
+def _resolve_db_path() -> str:
+    explicit_db_path = os.getenv("DATABASE_PATH")
+    if explicit_db_path:
+        return explicit_db_path
+
+    railway_mount = os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
+    if railway_mount:
+        return os.path.join(railway_mount, DEFAULT_DB_NAME)
+
+    # Railway persistent volumes are commonly mounted at /data.
+    if os.path.isdir("/data") and os.access("/data", os.W_OK):
+        return os.path.join("/data", DEFAULT_DB_NAME)
+
+    return DEFAULT_DB_NAME
+
+
+DB_PATH = _resolve_db_path()
 
 
 def _public_user(d: Dict[str, Any]) -> Dict[str, Any]:
