@@ -384,6 +384,24 @@ def admin_reset(
     }
 
 
+@app.get("/api/admin/info")
+def admin_info(x_admin_token: Optional[str] = Header(default=None)) -> dict:
+    """Return runtime configuration info for deployment verification."""
+    _require_admin_reset_token(x_admin_token)
+    db_path = db.DB_PATH
+    db_exists = os.path.isfile(db_path)
+    db_size = os.path.getsize(db_path) if db_exists else 0
+    return {
+        "db_path": db_path,
+        "db_exists": db_exists,
+        "db_size_bytes": db_size,
+        "database_path_env": os.getenv("DATABASE_PATH"),
+        "railway_volume_mount_path_env": os.getenv("RAILWAY_VOLUME_MOUNT_PATH"),
+        "data_dir_exists": os.path.isdir("/data"),
+        "data_dir_writable": os.access("/data", os.W_OK) if os.path.isdir("/data") else False,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Static file serving
 # ---------------------------------------------------------------------------
